@@ -1,0 +1,72 @@
+Celltype,tissue,count
+24hpf-differentiating neurons,Central Nervous System,523
+24hpf-differentiating neurons - dlx,Central Nervous System,65
+24hpf-differentiating neurons - eomesa,Central Nervous System,101
+24hpf-differentiating neurons - hmx,Central Nervous System,30
+24hpf-differentiating neurons - phox2a,Central Nervous System,44
+24hpf-differentiating neurons - rohon beard,Central Nervous System,62
+24hpf-differentiating neurons - sst1.1,Central Nervous System,4
+24hpf-endoderm,Endoderm,64
+24hpf-endothelial,Endothelial,127
+24hpf-endothelial - posterior,Endothelial,53
+24hpf-epidermal - acbd7,Epidermis,2
+24hpf-epidermal - and1,Epidermis,26
+24hpf-epidermal - anterior,Epidermis,75
+24hpf-epidermal - atp1a1a.2,Epidermis,38
+24hpf-epidermal - col7a1l,Epidermis,60
+24hpf-epidermal - grhl3,Epidermis,12
+24hpf-epidermal - kera,Epidermis,24
+24hpf-epidermal - muc5ac,Epidermis,17
+24hpf-epidermal - olfactory placode,Epidermis,44
+24hpf-epidermal - prr15la,Epidermis,24
+24hpf-epidermal - rbp4,Epidermis,35
+24hpf-epidermal - s100a11,Epidermis,8
+24hpf-erythroid,Blood,506
+24hpf-germline,Germ Line,9
+24hpf-hatching gland,Hatching Gland,32
+24hpf-heart,Heart,71
+24hpf-heart - hoxd9a,Heart,34
+24hpf-heart - mature,Heart,1
+24hpf-ionocyte - ca2,Epidermis,31
+24hpf-lateral line - krt15,Epidermis,14
+24hpf-lens,Eye,14
+24hpf-leukocyte,Blood,13
+24hpf-macrophage,Blood,61
+24hpf-mesoderm - emp2,Pharyngeal Arch,31
+24hpf-muscle - myl1,Muscle,2
+24hpf-muscle - myl10,Muscle,2
+24hpf-myotome,Muscle,32
+24hpf-neural - diencephalon ,Central Nervous System,203
+24hpf-neural - diencephalon posterior,Central Nervous System,46
+24hpf-neural - dorsal hindbrain,Central Nervous System,667
+24hpf-neural - dorsal spinal cord,Central Nervous System,31
+24hpf-neural - floorplate,Central Nervous System,9
+24hpf-neural - hindbrain gsx1,Central Nervous System,245
+24hpf-neural - hindbrain roofplate,Central Nervous System,37
+24hpf-neural - midbrain,Central Nervous System,1211
+24hpf-neural - midbrain ventral nkx6.2,Central Nervous System,191
+24hpf-neural - posterior ventral nkx6.2,Central Nervous System,146
+24hpf-neural - telencephalon,Central Nervous System,351
+24hpf-neural - ventral hindbrain,Central Nervous System,911
+24hpf-neural crest,Cranial NC,8
+24hpf-neural crest - grem2,Cranial NC,92
+24hpf-neural crest - iridoblast,Pigment,5
+24hpf-neural crest - mcamb,Pigment,52
+24hpf-neural crest - melanoblast,Pigment,23
+24hpf-neural crest - xanthophore,Pigment,27
+24hpf-notocord,Notochord,3
+24hpf-optic cup,Eye,772
+24hpf-otic placode,Ear,33
+24hpf-pancreas primordium,Pancreas,6
+24hpf-pectoral fin bud,Fin,104
+24hpf-periderm,Epidermis,22
+24hpf-pharyngeal arch - cd248b,Pharyngeal Arch,135
+24hpf-pharyngeal arch - lbx1a,Pharyngeal Arch,2
+24hpf-pharyngeal arch - ndnf,Pharyngeal Arch,44
+24hpf-pharyngeal arch - tbx1,Pharyngeal Arch,22
+24hpf-pharyngeal pouch,Pharyngeal Arch,53
+24hpf-proctodeum,Intestine,4
+24hpf-pronephric duct,Kidney,8
+24hpf-retina pigmented epithelium,Eye,37
+24hpf-tailbud - PSM,Muscle,23
+24hpf-tailbud - spinal cord,Central Nervous System,144

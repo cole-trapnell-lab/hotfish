@@ -1,0 +1,65 @@
+Groupname,tissue,count
+?Plac?Proneph?,Kidney,90
+antSC,Central Nervous System,1285
+"Arch,2",Pharyngeal Arch,115
+"ArchNC,1",Pharyngeal Arch,308
+CardMus,Heart,31
+CranGang,Central Nervous System,247
+Endo,Endoderm,246
+"Epi,1",Epidermis,235
+"EpiFin,1",Fin,240
+"EpiPharynx,2",Pharynx,484
+FB,Epidermis,1478
+FloorPlate,Central Nervous System,335
+FMB,Central Nervous System,655
+Hair cell,Lateral Line,3
+Hatching,Hatching Gland,213
+HB,Central Nervous System,3365
+Heart,Heart,64
+HeartProg,Heart,128
+"Hypo,1",Hypochord,148
+"Hypo,2",Hypochord,3
+Hypochord,Hypochord,14
+Intest,Intestine,122
+Kidney,Kidney,57
+LatLine,Lateral Line,65
+Lens,Eye,270
+Macro,Blood,79
+MB,Central Nervous System,551
+MHB,Central Nervous System,1964
+MyoProg,Muscle,3
+NaKiono,Epidermis,111
+NCcardiac,Heart,225
+NCCmuc,Epidermis,53
+NCirid,Pigment,25
+NCmel,Pigment,94
+NCneural,Cranial NC,173
+NCtrunk,Pigment,222
+NCxantho,Pigment,112
+Neutrophil,Blood,31
+Nonspecific,NA,1410
+Notochord,Notochord,117
+Olfactory,Olfactory,122
+Otic,Ear,86
+PancAB,Pancreas,31
+Parachord,Connective tissue,331
+ParaxMes,Muscle,285
+PecFinBud,Fin,75
+Peri,Epidemris,753
+PGC,Germ Line,9
+RBC,Blood,557
+RBCprog,Blood,2
+RetDiff,Eye,80
+RetProg,Eye,1414
+Roofplate,Central Nervous System,65
+RPE,Eye,131
+SC,Central Nervous System,1496
+SkelFast,Muscle,456
+SkelProg,Muscle,268
+SkelSlow,Muscle,295
+Somite,Muscle,299
+SwimBladder,Swim Bladder,53
+Tailbud,Muscle,125
+Thymus,NA,6
+Vessel?,Endothelial,175
+vHiono,Epidemris,33

@@ -1,0 +1,363 @@
+---
+title: "Figure 1 + Figure S1"
+output: html_notebook
+---
+
+
+# read in packages
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(plotly)
+  library(viridis)
+  library(data.table)
+  library(DelayedArray)
+  library(devtools)
+  library(tidyr)
+  library(monocle3)
+  library(plotly)
+  library(htmlwidgets)
+  library(ggrepel)
+  library(VGAM)
+  library(pheatmap)
+  library(tidymodels)
+  library(stringr)
+  library(gprofiler2)
+  library(ggridges)
+  
+  DelayedArray:::set_verbose_block_processing(TRUE)
+  options(DelayedArray.block.size=1e9)  
+})
+
+
+
+plot_umap_gene_expr <- function(cds, marker, cell_size = 1, stroke_size = 0.0){
+                           
+  cds_subset <- cds[rowData(cds)$gene_short_name == marker,]
+  marker_expr <- Matrix::t(assay(cds_subset))/colData(cds_subset)$Size_Factor
+  
+  meta_df <- as.data.frame(colData(cds_subset))
+  meta_df$umap1 <- reducedDim(x = cds, type = "UMAP")[,1]
+  meta_df$umap2 <- reducedDim(x = cds, type = "UMAP")[,2]
+  
+  meta_df$umap1 <- colData(cds)$umap_final_1
+  meta_df$umap2 <- colData(cds)$umap_final_2
+  
+  meta_df$marker <- as.numeric(marker_expr[,1])
+  meta_df$marker = with(meta_df, ifelse(marker >= 0.01, marker, NA))
+  
+  ggplot(meta_df, aes(x = umap1, y = umap2, color = log10(marker + 0.1))) +
+    geom_point(size = cell_size, stroke = stroke_size, aes(alpha = ifelse(!is.na(marker), "1", "2"))) + 
+    scale_color_viridis(option = "viridis",
+          name = "log10(",marker," + 0.1)", na.value = "grey80") +
+    scale_alpha_manual(values = c(1, .3)) + guides(alpha = FALSE)
+    monocle3:::monocle_theme_opts()
+    theme_void()
+}
+
+
+```
+
+
+# plot umap of cells
+
+## read in cds of hotfish only (32C, 34C)
+
+```{r}
+
+
+cds <- readRDS('hotfish.cds')
+
+
+```
+
+# plot umap
+
+```{r}
+
+plot_cells(cds, color_cells_by = 'temp')
+
+```
+
+
+# Figure S1
+
+## read in combined coldata (28C controls (in reference), +32C, 34C
+
+```{r}
+
+coldat = fread('data/hotfish-ctrls-coldata.csv')
+
+```
+
+
+```{r}
+
+# fraction hashed
+coldat %>% 
+  mutate(cell_hashed = !is.na(top_to_second_best_ratio)) %>% 
+  pull(cell_hashed) %>% 
+  table() %>% 
+  barplot(horiz = T, xlim = c(0,500000))
+
+# hash enrichment
+hist(log10(coldat$hash_ratio),
+     breaks = 50, ylim = c(0,40000), xlim = c(0,4),
+     col = 'grey', lwd = 2, main = NULL,
+     xlab = 'Hash Enrichment Ratio')
+abline(v = log10(3), col = 'red', lwd = 2)
+
+# make df for cells
+emb_df = coldat %>%
+  group_by(temp, embryo, timepoint) %>%
+  summarize(cells = n(),
+            umis_per_cell = mean(n.umi)) %>% 
+  mutate(genotype = factor(temp, levels = c('WT', '32C', '34C')))
+
+
+# cells per embryo facet boxplot
+ggplot(emb_df %>% filter(embryo != '')) +
+  geom_boxplot(aes(x = timepoint, y = cells)) +
+  ylim(0,3000) +
+  facet_grid(.~temp) +
+  monocle3:::monocle_theme_opts()
+
+# umis per cell facet boxplot
+ggplot(emb_df %>% filter(embryo != '')) +
+  geom_boxplot(aes(x = timepoint, y = umis_per_cell)) +
+  ylim(0,1200) +
+  facet_grid(.~temp) +
+  monocle3:::monocle_theme_opts()
+
+
+# knee plot automatically generated in bbi-sci pipeline (https://github.com/bbi-lab/bbi-sci)
+
+```
+
+
+## cell composition bias
+
+```{r}
+
+# dorrity et al
+df = fread('data/hotfish-ref_18-48hpf_coldata.csv')
+df.study = 
+df %>% 
+  filter(timepoint == 24,
+        expt != 'HF4') %>% 
+  group_by(embryo, tissue) %>% 
+  summarize(count = n()) %>% 
+  group_by(tissue) %>% 
+  summarize(mean_count = mean(count, na.rm=TRUE),
+            se_count = sd(count, na.rm=TRUE) / sqrt(n())) %>% 
+  na.omit() 
+
+# plot for this study
+ggplot(df.study %>% filter(!is.na(tissue))) +
+  geom_bar(aes(x = reorder(tissue, - mean_count), y = mean_count), stat = 'identity', col = 'black', fill = 'grey') +
+  geom_errorbar(aes(x = reorder(tissue, - mean_count),
+                    y = mean_count,
+                    ymin = (mean_count - se_count),
+                    ymax = (mean_count + se_count)), position = position_dodge(width=0.9), width = 0.25) +
+  xlab('') + ylab('mean count per embryo') + 
+  theme(text = element_text(size=8),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  monocle3:::monocle_theme_opts()
+
+ct_ord = df.study %>% filter(!is.na(tissue)) %>% arrange(-mean_count) %>% pull(tissue)
+
+# wagner et al
+df = fread('data/wag-cts-tissue.csv')
+df.wag = 
+df %>% 
+  group_by(tissue) %>% 
+  summarize(count = sum(count))
+
+ggplot(df.wag %>% filter(!is.na(tissue))) +
+  geom_bar(aes(x = reorder(tissue, - count), y = count), stat = 'identity', col = 'black', fill = 'grey') +
+  xlab('') + ylab('mean count per embryo') + 
+  theme(text = element_text(size=8),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  monocle3:::monocle_theme_opts()
+
+# farnsworth et al
+df = fread('data/mil-cts-tissue.csv')
+df.mil = 
+df %>% 
+  group_by(tissue) %>% 
+  summarize(count = sum(count))
+
+ggplot(df.mil %>% filter(!is.na(tissue))) +
+  geom_bar(aes(x = reorder(tissue, - count), y = count), stat = 'identity', col = 'black', fill = 'grey') +
+  xlab('') + ylab('mean count per embryo') + 
+  theme(text = element_text(size=8),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  monocle3:::monocle_theme_opts()
+
+
+```
+
+
+## heat shock plots
+
+```{r}
+
+# subset to only hotfish data
+cds_sub = cds[,colData(cds)$experiment == 'HF4']
+
+
+# hsp90aa1.1
+plot_umap_gene_expr(cds_sub, 'hsp90aa1.1', cell_size = 0.5) + facet_grid(.~temp)
+
+# hsp70l
+plot_umap_gene_expr(cds_sub, 'hsp70l', cell_size = 0.5) + facet_grid(.~temp)
+
+
+
+```
+
+
+## bellwether cell types
+
+### generate abundance matrix
+
+```{r}
+
+coldat = fread('data/Users/dorrity/Dropbox/q_lab/projects/40_fish/HF4/hotfish-github/data/hotfish-ref_18-48hpf_coldata.csv')
+
+# generate cell counts table by sub-cluster
+coldata_summary = coldat %>%
+  group_by(embryo, cell_type_broad) %>% 
+  dplyr::summarize(cells=n()) %>% 
+  filter(!is.na(cell_type_broad))
+
+cell_counts_wide = coldata_summary %>% 
+  pivot_wider(names_from = embryo, values_from = cells, values_fill = 0)
+
+cell_groups = as.character(cell_counts_wide %>% 
+                            pull(cell_type_broad))
+cell_counts_wide = as.matrix(cell_counts_wide[,2:ncol(cell_counts_wide)])
+row.names(cell_counts_wide) = cell_groups
+
+cell_counts_wide = t(cell_counts_wide)
+
+
+
+# size factor correction
+covariates_df = coldat %>%
+  group_by(embryo) %>% 
+  dplyr::summarize(cells=n()) %>% 
+  as.data.frame()
+rownames(covariates_df) = covariates_df$embryo
+
+all_cell_count_cds = new_cell_data_set(t(cell_counts_wide), 
+                                   cell_metadata=covariates_df)
+all_cell_count_cds = detect_genes(all_cell_count_cds)
+all_cell_count_cds = estimate_size_factors(all_cell_count_cds)
+all_cell_count_cds = preprocess_cds(all_cell_count_cds, num_dim = 10, norm_method="size_only", method = "PCA")
+all_cell_count_cds = reduce_dimension(all_cell_count_cds, preprocess_method = "PCA")
+
+
+sf = size_factors(all_cell_count_cds)
+cell_counts_wide = round(cell_counts_wide / sf, 0)
+
+
+```
+
+### compute correlations
+
+```{r}
+
+
+# for each cell type
+ps_df = coldat %>%
+  group_by(embryo, pseudostage) %>% 
+  dplyr::summarize(cells=n())
+
+# subset to a particular range of pseudostage
+ps_df = ps_df[ps_df$pseudostage > 0 & ps_df$pseudostage < 40,]
+cell_counts_wide = cell_counts_wide[ps_df$embryo,]
+identical(ps_df$embryo, rownames(cell_counts_wide))
+
+
+cors = cor(ps_df$pseudostage, cell_counts_wide)
+cor_df = as.data.frame(cbind(colnames(cell_counts_wide), as.numeric(cors)))
+colnames(cor_df) = c('cell_type', 'value')
+cor_df$value = as.numeric(cor_df$value)
+cor_df$tissue = coldat$tissue[match(cor_df$cell_type, coldat$cell_type_broad)]
+cor_df$germ_layer = coldat$germ_layer[match(cor_df$cell_type, coldat$cell_type_broad)]
+
+
+# top cors
+head(cor_df[order(-cor_df$value),], 20)
+head(cor_df[order(cor_df$value),], 20)
+
+```
+
+### plot correlations
+
+```{r}
+
+cor_thresh = 0.7
+
+ggplot(cor_df) +
+  geom_label_repel(data = . %>% 
+                    mutate(label = case_when(abs(value) > cor_thresh ~ cell_type, TRUE ~ "")),
+                  aes(x = reorder(cell_type, value), y = value, label = label, fill = germ_layer),
+                  segment.color = 'grey',
+                  box.padding = 0.2,
+                  show.legend = TRUE,
+                  point.padding = 0.2,
+                  nudge_x = .15,
+                  nudge_y = .5,
+                  direction = 'y',
+                  segment.curvature = -1e-20,
+                  size = 4)  +
+  geom_point(aes(x = reorder(cell_type, value), y = value), size = 2.5) +
+  ylim(-1,1) +
+  ylab('correlation of embryo stage and cell type abundance') +
+  xlab('') +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          panel.background = element_rect(fill = "transparent",colour = NA),
+          plot.background = element_rect(fill = "transparent",colour = NA))
+
+
+
+```
+
+### plot raw data examples
+
+```{r}
+
+# melt cell count matrix
+ct_summary = melt(cell_counts_wide)
+colnames(ct_summary) = c('embryo', 'cell_type', 'cells')
+ct_summary$pseudostage = ps_df$pseudostage[match(ct_summary$embryo, ps_df$embryo)]
+
+
+# select example cell types
+ct_pos = 'fin mesenchyme'
+ct_neg = 'neurons (gabaergic, glutamatergic)'
+
+# plot
+ggplot() + 
+  geom_point(data = ct_summary %>% filter(cell_type == ct_pos),
+             aes(x = pseudostage, y = cells),
+             size = 0.7, col = 'black') +
+  geom_smooth(data = ct_summary %>% filter(cell_type == ct_pos),
+              aes(x = pseudostage, y = cells),
+              method = 'loess', col = 'darkgrey') +
+  geom_point(data = ct_summary %>% filter(cell_type == ct_neg),
+             aes(x = pseudostage, y = cells),
+             size = 0.7, col = '#59b6de') +
+  geom_smooth(data = ct_summary %>% filter(cell_type == ct_neg),
+              aes(x = pseudostage, y = cells),
+              method = 'loess', col = '#59b6de') +
+  monocle3:::monocle_theme_opts() +
+  ylab('cell count') 
+
+```
+
