@@ -1,0 +1,228 @@
+---
+title: "Figure 4 + S4"
+output: html_notebook
+---
+
+## read in packages
+
+```{r}
+
+
+plot_umap_gene_expr <- function(cds, marker, cell_size = 1, stroke_size = 0.0){
+                           
+  cds_subset <- cds[rowData(cds)$gene_short_name == marker,]
+  marker_expr <- Matrix::t(assay(cds_subset))/colData(cds_subset)$Size_Factor
+  
+  meta_df <- as.data.frame(colData(cds_subset))
+  meta_df$umap1 <- reducedDim(x = cds, type = "UMAP")[,1]
+  meta_df$umap2 <- reducedDim(x = cds, type = "UMAP")[,2]
+  
+  meta_df$marker <- as.numeric(marker_expr[,1])
+  meta_df$marker = with(meta_df, ifelse(marker >= 0.01, marker, NA))
+  
+  ggplot(meta_df, aes(x = umap1, y = umap2, color = log10(marker + 0.1))) +
+    geom_point(size = cell_size, stroke = stroke_size, aes(alpha = ifelse(!is.na(marker), "1", "2"))) + 
+    scale_color_viridis(option = "viridis",
+          name = "log10(",marker," + 0.1)", na.value = "grey80") +
+    scale_alpha_manual(values = c(1, .3)) + guides(alpha = FALSE) +
+    monocle3:::monocle_theme_opts() +
+    theme_void()
+}
+
+```
+
+
+## translation - upr scatterplot
+
+```{r}
+
+# sig_df = fread('/Users/dorrity/Dropbox/q_lab/projects/40_fish/HF4/hotfish-github/data/for-zscape/hotfish-ref-signature-scores.txt')
+
+sig_df = fread('data/zscape/hotfish-ref-signature-scores.txt')
+
+# make embryo celltype df
+df = sig_df %>% 
+  filter(temp %in% c('28C','32C', '34C')) %>% 
+  filter(experiment == 'HF4') %>% 
+  group_by(cell_type_broad, oligo_tag, pseudostage, temp) %>% 
+  summarize(mean_translation = mean(translation_index, na.rm=TRUE),
+            mean_upr = mean(upr_index, na.rm=TRUE),
+            mean_degr = mean(degr_misfolded_index, na.rm=TRUE),
+            er_stress_index = mean(er_stress_index, na.rm=TRUE),
+            mean_age = mean(mean_nn_time, na.rm=TRUE))
+
+# scatterplot of UPR signature vs translation signature
+ggplot(df %>% filter(cell_type_broad != 'notochord')) +
+  geom_vline(xintercept = 0, col = '#4a4a4a', lwd = 0.5, lty = 'longdash') +
+  geom_hline(yintercept = 0, col = '#4a4a4a', lwd = 0.5, lty = 'longdash') +
+  geom_point(aes(x = mean_translation, y = mean_upr),
+             size = 1, stroke = 0.1, shape = 20, col = 'darkgrey') +
+  # highlight notochord cells
+  geom_smooth(data = df %>% filter(cell_type_broad == 'notochord'),
+             aes(x = mean_translation, y = mean_upr), col = 'black', method = 'lm', lwd = 0.5, se = FALSE) +
+  geom_point(data = df %>% filter(cell_type_broad == 'notochord'),
+             aes(x = mean_translation, y = mean_upr),
+             size = 1, stroke = 0.1, shape = 20, col = 'black') +
+  ylab('mean UPR per embryo-celltype') +
+  xlab('mean translation per embryo-celltype') +
+  ylim(-0.15,0.3) +
+  xlim(-0.15,0.3) + 
+  monocle3:::monocle_theme_opts()
+
+
+```
+
+## translation - upr circular plot
+
+
+```{r}
+
+
+sig_df = fread('data/zscape/hotfish-ref-signature-scores.txt')
+
+# make embryo celltype df
+df = sig_df %>% 
+  filter(temp %in% c('28C','32C', '34C')) %>% 
+  group_by(cell_type_broad, oligo_tag, pseudostage, temp) %>% 
+  summarize(mean_translation = mean(translation_index, na.rm=TRUE),
+            mean_upr = mean(upr_index, na.rm=TRUE),
+            mean_degr = mean(degr_misfolded_index, na.rm=TRUE),
+            er_stress_index = mean(er_stress_index, na.rm=TRUE),
+            mean_age = mean(mean_nn_time, na.rm=TRUE))
+
+
+# count up positive cells, look at fraction/percent expressed
+df <- df %>%
+  mutate(
+    both = ifelse(mean_upr > 0 & mean_translation > 0, 1, 0),
+    none = ifelse(mean_upr < 0 & mean_translation < 0, 1, 0),
+    upr = ifelse(mean_upr > 0 & mean_translation < 0, 1, 0),
+    tln = ifelse(mean_upr < 0 & mean_translation > 0, 1, 0),
+  )
+
+df.pct = df %>% select(cell_type_broad, temp, both, upr, tln, none) %>%
+  group_by(cell_type_broad, temp) %>% 
+  summarize(both = sum(both),
+            upr = sum(upr),
+            tln = sum(tln),
+            none = sum(none),
+            total = n(),
+            pct_both = (both/total) * 100)
+
+# merge in pct_both signatures from the two temps
+df.pct.32 = df.pct[df.pct$temp == '32C',]
+df.pct.34 = df.pct[df.pct$temp == '34C',]
+df.pct$pct_both_32 = df.pct.32$pct_both[match(df.pct$cell_type_broad, df.pct.32$cell_type_broad)]
+df.pct$pct_both_34 = df.pct.34$pct_both[match(df.pct$cell_type_broad, df.pct.34$cell_type_broad)]
+df.pct$pct_both_temp = apply(df.pct[,c('pct_both_32','pct_both_34')], 1, mean) # mean pct_both over temperatures
+df.pct$pct_both_ratio = df.pct$pct_both_temp - df.pct$pct_both # compute percent increase in fraction expressed
+
+# circular plot
+ggplot() +
+  geom_hline(yintercept = 0, col = 'black', lwd = 1) +
+  geom_hline(yintercept = 25, col = 'black', lwd = 1) +
+  geom_step(data = df.pct %>% filter(total > 100, temp == '28C'),  aes(x = reorder(cell_type_broad, pct_both), y = pct_both, group = 1), col = 'darkgrey') +
+  geom_bar(data = df.pct %>% filter(total > 100),  aes(x = reorder(cell_type_broad, pct_both), y = (pct_both_ratio)), stat = 'identity', fill = 'orange2') +
+  monocle3:::monocle_theme_opts() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ylab('percent cells expressing both translation and UPR') +
+  xlab('') +
+  ylim(-30,30) + 
+  coord_polar(start = 0, clip = 'on', theta = 'x')
+
+
+```
+
+
+## notochord subtype markers
+
+```{r}
+
+plot_umap_gene_expr(cds, 'rab32a', cell_size = 0.5) + facet_grid(.~temp)
+plot_umap_gene_expr(cds, 'cav3', cell_size = 0.5) + facet_grid(.~temp)
+plot_umap_gene_expr(cds, 'col8a1a', cell_size = 0.5) + facet_grid(.~temp)
+plot_umap_gene_expr(cds, 'entpd5a', cell_size = 0.5) + facet_grid(.~temp)
+
+
+```
+
+## hotspot umap
+
+## read in notochord cds
+
+
+## prepare combined cds for hotspot analysis
+
+```{r}
+
+cds <- readRDS('data/zscape/hotfish-notochord-cds.rds')
+colData(cds)$embryo <- colData(cds1)$Oligo
+
+
+# plot notochord by hotspot
+plot_cells(cds2, color_cells_by = 'temp_up')
+# plot notochord by mean nn time (timepoint)
+plot_cells(cds2, color_cells_by = 'mean_nn_time')
+
+
+
+
+
+```
+
+
+
+## perform hotspot, plot spatially biased cells
+
+```{r}
+
+source("functions/hotspot_functions.R")
+
+## hotspot label
+table(colData(cds)$geno_treatment)
+label_of_interest = c('injcontrol_32', 'injcontrol_34') ### set this to label of interest - here showing high temperature cells. 'ISRIB_34' 
+colData(cds)$hot_label <- NA
+colData(cds)$hot_label[colData(cds)$geno_treatment %in% 'injcontrol_28']  <- 'no'
+colData(cds)$hot_label[colData(cds)$geno_treatment %in% label_of_interest] <- 'yes'
+cds_sub = cds[,!is.na(colData(cds)$hot_label)]
+
+hs.df = calc_hotspot(cds_sub,
+                         compare_col = "hot_label", compare = "yes", 
+                         reduction_method = "UMAP")
+colData(cds_sub)$subset_umap2d_1 = reducedDims(cds_sub)[["UMAP"]][,1]
+colData(cds_sub)$subset_umap2d_2 = reducedDims(cds_sub)[["UMAP"]][,2]
+coldata_sub = colData(cds_sub) %>%
+  as.data.frame() %>% 
+  left_join(hs.df %>% select(cell, adjusted_pval, localG), 
+            by = "cell") 
+
+### output hotspot umap
+sig_thresh = 0.05
+
+coldata_sub$is_hotspot = NA 
+coldata_sub = coldata_sub %>% 
+  mutate(is_hotspot = adjusted_pval < 0.05)
+
+# this one shows hotspot, is plotted over reference cells
+ggplot() +
+  geom_point(data = coldata_sub %>% filter(is.na(adjusted_pval)),
+             aes(x = subset_umap2d_1,
+                 y = subset_umap2d_2),
+             color = "black",
+             stroke = 0,
+             size = 0.75) +
+  geom_point(data = coldata_sub %>% filter(is.na(adjusted_pval)),
+             aes(x = subset_umap2d_1,
+                 y = subset_umap2d_2),
+             color = "grey90",
+             stroke = 0,
+             size = 0.6) +
+  geom_point(data = coldata_sub %>% filter(is_hotspot),
+             aes(x = subset_umap2d_1,
+                 y = subset_umap2d_2),
+             color = 'tomato',
+             stroke = 0,
+             size = 0.6) +
+  theme_void() +
+  theme(legend.position = "none") 
+

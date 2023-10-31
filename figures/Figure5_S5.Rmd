@@ -147,7 +147,7 @@ plot_cells(cds2, color_cells_by = 'temp_up')
 ```{r}
 
 
-source("/Users/dorrity/Dropbox/EMBL/projects/code_proj/functions/hotspot_functions.R")
+source("functions/hotspot_functions.R")
 
 ## hotspot label
 table(colData(cds)$geno_treatment)
