@@ -1,0 +1,200 @@
+---
+title: "Figure 5 + Figure S5"
+output: html_notebook
+---
+
+read in packages
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(plotly)
+  library(viridis)
+  library(data.table)
+  library(DelayedArray)
+  library(devtools)
+  library(tidyr)
+  library(monocle3)
+  library(plotly)
+  library(htmlwidgets)
+  library(ggrepel)
+  library(VGAM)
+  library(pheatmap)
+  library(tidymodels)
+  library(stringr)
+  library(gprofiler2)
+  library(ggridges)
+  
+  DelayedArray:::set_verbose_block_processing(TRUE)
+  options(DelayedArray.block.size=1e9)  
+})
+
+
+```
+
+
+
+## atf6 fails to accelerate at high temp
+
+```{r}
+
+coldat = fread('data/zscape/hotfish-atf6-isrib-coldata.csv')
+
+# compute mean nn time per embryo
+emb_df = coldat %>% 
+  filter(!is.na(temp)) %>% 
+  group_by(embryo, timepoint, temp, treatment) %>%
+  summarize(embryo_age.bin = mean(mean_nn_time, na.rm=TRUE) %>% cut(breaks = seq(18,80, 16)),
+            embryo_age = mean(mean_nn_time, na.rm=TRUE))
+emb_df$geno_group = factor(emb_df$treatment, levels = c('injcontrol', 'atf6', 'DMSO', 'ISRIB'))
+
+# boxplot - whole embryo
+ggplot(emb_df %>% filter(!is.na(timepoint),
+                         geno_group %in% c('injcontrol', 'atf6')),
+       aes(x = geno_group, y = embryo_age, col = temp %>% factor())) + 
+  geom_boxplot(outlier.alpha = NA) +
+  geom_point(position = position_jitterdodge()) +
+  facet_wrap(.~timepoint) +
+  scale_color_manual(values = c('#828181', '#eb4034')) +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none') +
+  xlab('')
+
+```
+
+
+## atf6 fails to accelerate notochord cells
+
+```{r}
+
+coldat = fread('data/zscape/hotfish-atf6-isrib-coldata.csv')
+
+# compute mean nn time per embryo, then plot relative to controls
+emb_df = coldat %>% 
+  group_by(embryo, timepoint, temp, treatment, cell_type_broad) %>%
+  summarize(embryo_age.bin = mean(mean_nn_time, na.rm=TRUE) %>% cut(breaks = seq(18,80, 16)),
+            embryo_age = mean(mean_nn_time, na.rm=TRUE))
+emb_df$geno_group = factor(emb_df$treatment, levels = c('injcontrol', 'atf6', 'DMSO', 'ISRIB'))
+
+## boxplot -notochord cells
+ct_of_interest = 'notochord'
+ggplot(emb_df %>% filter(!is.na(timepoint) & cell_type_broad %in% ct_of_interest,
+                         geno_group %in% c('injcontrol', 'atf6')),
+       aes(x = geno_group, y = embryo_age, col = temp %>% factor())) + 
+  geom_boxplot(outlier.alpha = NA) +
+  geom_point(position = position_jitterdodge()) +
+  facet_wrap(.~timepoint) +
+  scale_color_manual(values = c('#828181', '#eb4034')) +
+  ylab('notochord age') +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none') +
+  xlab('')
+
+```
+
+
+
+# Figure S5
+
+## prepare combined cds for hotspot analysis
+
+```{r}
+
+cds1 <- readRDS('data/zscape/hotfish-notochord-cds.rds')
+colData(cds1)$embryo <- colData(cds1)$Oligo
+cds2 = readRDS('data/zscape/hotfish-atf6-isrib-cds.rds')
+
+# subset to notochord and combine cds from ISRIB data + hotfish data
+cds1 = cds1[,!is.na(colData(cds1)$cell_type_broad) & colData(cds1)$cell_type_broad == 'notochord']
+cds2 = cds2[,!is.na(colData(cds2)$cell_type_broad) & colData(cds2)$cell_type_broad == 'notochord']
+colData(cds2)$gene_target = 'injcontrol'
+
+cds <- combine_cds(list(cds1,
+                        cds2))
+cds <- clear_cds_slots(cds)
+
+# pre-process coembed of notochord cells
+cds = estimate_size_factors(cds) %>% 
+  detect_genes() %>% 
+  preprocess_cds(num_dim = 20)
+colData(cds)$log.n.umi = colData(cds)$n.umi %>% log10()
+cds = align_cds(cds,
+                residual_model_formula_str = "~log.n.umi")
+
+cds = reduce_dimension(cds, max_components = 2,
+                       umap.min_dist = 0.2,
+                       umap.n_neighbors = 15L,
+                       preprocess_method = 'Aligned')
+cds = cluster_cells(cds, resolution = 2e-5, reduction_method = 'UMAP')
+
+colData(cds)$temp = substr(colData(cds)$temp, 1,2)
+colData(cds)$geno_treatment = coalesce(colData(cds)$gene_target,
+                                       colData(cds)$treatment)
+colData(cds)$geno_treatment = paste(colData(cds)$geno_treatment,
+                                    colData(cds)$temp, sep = '_')
+
+# original HF only hotspot
+plot_cells(cds2, color_cells_by = 'temp_up')
+
+
+```
+
+
+
+## perform hotspot, plot spatially biased cells
+
+```{r}
+
+
+source("/Users/dorrity/Dropbox/EMBL/projects/code_proj/functions/hotspot_functions.R")
+
+## hotspot label
+table(colData(cds)$geno_treatment)
+label_of_interest = c('injcontrol_32', 'injcontrol_34') ### set this to label of interest - here showing high temperature cells. 'ISRIB_34' 
+colData(cds)$hot_label <- NA
+colData(cds)$hot_label[colData(cds)$geno_treatment %in% 'injcontrol_28']  <- 'no'
+colData(cds)$hot_label[colData(cds)$geno_treatment %in% label_of_interest] <- 'yes'
+cds_sub = cds[,!is.na(colData(cds)$hot_label)]
+
+hs.df = calc_hotspot(cds_sub,
+                         compare_col = "hot_label", compare = "yes", 
+                         reduction_method = "UMAP")
+colData(cds_sub)$subset_umap2d_1 = reducedDims(cds_sub)[["UMAP"]][,1]
+colData(cds_sub)$subset_umap2d_2 = reducedDims(cds_sub)[["UMAP"]][,2]
+coldata_sub = colData(cds_sub) %>%
+  as.data.frame() %>% 
+  left_join(hs.df %>% select(cell, adjusted_pval, localG), 
+            by = "cell") 
+
+### output hotspot umap
+sig_thresh = 0.05
+
+coldata_sub$is_hotspot = NA 
+coldata_sub = coldata_sub %>% 
+  mutate(is_hotspot = adjusted_pval < 0.05)
+
+# this one shows hotspot, is plotted over reference cells
+ggplot() +
+  geom_point(data = coldata_sub %>% filter(is.na(adjusted_pval)),
+             aes(x = subset_umap2d_1,
+                 y = subset_umap2d_2),
+             color = "black",
+             stroke = 0,
+             size = 0.75) +
+  geom_point(data = coldata_sub %>% filter(is.na(adjusted_pval)),
+             aes(x = subset_umap2d_1,
+                 y = subset_umap2d_2),
+             color = "grey90",
+             stroke = 0,
+             size = 0.6) +
+  geom_point(data = coldata_sub %>% filter(is_hotspot),
+             aes(x = subset_umap2d_1,
+                 y = subset_umap2d_2),
+             color = 'tomato',
+             stroke = 0,
+             size = 0.6) +
+  theme_void() +
+  theme(legend.position = "none") 
+
+```
