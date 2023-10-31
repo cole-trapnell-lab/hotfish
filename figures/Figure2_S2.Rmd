@@ -1,0 +1,433 @@
+---
+title: "Figure 2"
+output: html_notebook
+---
+
+# read in packages
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(plotly)
+  library(viridis)
+  library(data.table)
+  library(DelayedArray)
+  library(devtools)
+  library(tidyr)
+  library(monocle3)
+  library(plotly)
+  library(htmlwidgets)
+  library(ggrepel)
+  library(VGAM)
+  library(pheatmap)
+  library(tidymodels)
+  library(stringr)
+  library(gprofiler2)
+  library(ggridges)
+  
+  DelayedArray:::set_verbose_block_processing(TRUE)
+  options(DelayedArray.block.size=1e9)  
+})
+
+```
+
+
+# Figure 2
+
+## embryo trajectory
+
+### read in embryo composition coldata
+
+```{r}
+
+coldat_ref = fread(file = 'data/zscape/reference-embryo-trajectory.txt'
+coldat_quer = fread(file = 'data/zscape/hotfisih-query-embryo-trajectory.txt')
+
+```
+
+### plot embryo trajectories
+
+```{r}
+
+timepoint_filt = 24
+ggplot(coldat_ref %>% filter(sample == 'HF4', timepoint == 30), aes(x = umap_1, y = umap_2)) + 
+  geom_point(col = 'grey') +
+  #geom_path(data = coldat_ref[coldat_ref$sample != 'HF4',], aes(x = umap_1, y = umap_2), col = 'black') +
+  geom_path(data = coldat_ref[coldat_ref$fake == TRUE,], aes( x = umap_1, y = umap_2, group = 1), col = 'lightgrey', size = 2) +
+  geom_point(data = coldat_ref %>% filter(temp == '28C', grepl('HF4', oligo_tag), , timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = 'grey') +
+  geom_point(data = coldat_quer %>% filter(temp == '32C', timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = '#FF2500') +
+  geom_point(data = coldat_quer %>% filter(temp == '34C', timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = '#8A1000') +
+  scale_color_viridis_c() 
+
+timepoint_filt = 30
+ggplot(coldat_ref %>% filter(sample == 'HF4', timepoint == 30), aes(x = umap_1, y = umap_2)) + 
+  geom_point(col = 'grey') +
+  #geom_path(data = coldat_ref[coldat_ref$sample != 'HF4',], aes(x = umap_1, y = umap_2), col = 'black') +
+  geom_path(data = coldat_ref[coldat_ref$fake == TRUE,], aes( x = umap_1, y = umap_2, group = 1), col = 'lightgrey', size = 2) +
+  geom_point(data = coldat_ref %>% filter(temp == '28C', grepl('HF4', oligo_tag), , timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = 'grey') +
+  geom_point(data = coldat_quer %>% filter(temp == '32C', timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = '#FF2500') +
+  geom_point(data = coldat_quer %>% filter(temp == '34C', timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = '#8A1000') +
+  scale_color_viridis_c() 
+
+# 36hpf
+timepoint_filt = 36
+ggplot(coldat_ref %>% filter(sample == 'HF4', timepoint == 36), aes(x = umap_1, y = umap_2)) + 
+  geom_point(col = 'grey') +
+  #geom_path(data = coldat_ref[coldat_ref$sample != 'HF4',], aes(x = umap_1, y = umap_2), col = 'black') +
+  geom_path(data = coldat_ref[coldat_ref$fake == TRUE,], aes( x = umap_1, y = umap_2, group = 1), col = 'lightgrey', size = 2) +
+  geom_point(data = coldat_ref %>% filter(temp == '28C', grepl('HF4', oligo_tag), , timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = 'grey') +
+  geom_point(data = coldat_quer %>% filter(temp == '32C', timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = '#FF2500') +
+  geom_point(data = coldat_quer %>% filter(temp == '34C', timepoint == timepoint_filt), aes(x = umap_1, y = umap_2), col = '#8A1000') +
+  scale_color_viridis_c() 
+
+
+# plot with centroids
+common_cols <- intersect(names(coldat_ref), names(coldat_quer))
+df1_common <- coldat_ref %>% select(common_cols)
+df2_common <- coldat_quer %>% select(common_cols)
+df <- bind_rows(df1_common, df2_common)
+df = df %>% filter(sample == 'HF4')
+df$group <- interaction(df$temp, df$timepoint)
+centroids <- aggregate(cbind(umap_1, umap_2) ~ group, df, mean)
+centroids = centroids %>% separate(group, into = c('temp', 'timepoint'))
+
+# plot this out
+ggplot(coldat_ref %>% filter(sample == 'HF4', fake == FALSE), aes(x = umap_1, y = umap_2)) + 
+  geom_point(col = 'grey') +
+  geom_point(data = coldat_ref %>% filter(temp == '28C', grepl('HF4', oligo_tag)), aes(x = umap_1, y = umap_2), col = 'grey', cex = 3) +
+  geom_point(data = coldat_quer %>% filter(temp == '32C'), aes(x = umap_1, y = umap_2), col = '#FF2500', cex = 3) +
+  geom_point(data = coldat_quer %>% filter(temp == '34C'), aes(x = umap_1, y = umap_2), col = '#8A1000', cex = 3) +
+  geom_point(data = centroids, aes(x = umap_1, y = umap_2, col = temp), 
+                    size = 4, shape = 8) +
+  scale_color_manual(values = c('grey', '#FF2500', '#8A1000')) +
+  facet_grid(.~timepoint) +
+  monocle3:::monocle_theme_opts() 
+
+
+# plot all, including reference embryos, remove the modeled embryos 'fake'
+ggplot(coldat_ref %>% filter(sample != 'HF4', fake == FALSE), aes(x = umap_1, y = umap_2)) + 
+  geom_point(col = 'grey') +
+  #geom_path(data = coldat_ref[coldat_ref$sample != 'HF4',], aes(x = umap_1, y = umap_2), col = 'black') +
+  geom_path(data = coldat_ref[coldat_ref$fake == TRUE,], aes( x = umap_1, y = umap_2, group = 1), col = 'lightgrey', size = 2) +
+  geom_point(data = coldat_ref %>% filter(fake == FALSE), aes(x = umap_1, y = umap_2, col = timepoint)) +
+  scale_color_viridis_c() 
+
+```
+
+
+## pseudostage vs expected stage
+
+From Kimmel et al
+Hence developmental rate varies as a linear function of incubation temperature, and a simple calculation allows one to determine approximately when embryos developing at any temperature between the extremes will reach a desired stage of interest: H, = h/(0.055T - 0.57), where H, = hours of development at temperature T, and h = hours of development to reach the stage at 28.5", as set out in Table 1. For example, computation of development to the 20-somite stage (occurring at 19 h at the standard temperature) yields 23.6 hours at 25"C, and 15 hours at 33°C. These times do not differ significantly from those observed (23.5 hours and 14.5 hours).
+
+
+
+```{r}
+
+coldat = fread('data/zscape/hotfish-ref_18-48hpf_coldata.csv')
+
+
+# compute expected stage
+coldat = coldat %>% 
+  mutate(expected_stage = as.numeric(substr(timepoint, 1, 2)) * (0.055 * as.numeric(substr(temp, 1, 2)) - 0.57)) 
+
+df.emb = coldat %>% 
+  select(embryo, temp, timepoint, pseudostage, expected_stage, expt) %>% 
+  distinct()
+df.emb$expt[grepl('HF4', df.emb$embryo)] <- 'HF4'
+
+
+ggplot(df.emb %>% filter(expt %in% 'HF4'), aes(x = expected_stage, y = pseudostage, col = temp)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_color_manual(values = c('grey','#FF6458', '#FF2003')) +
+  monocle3:::monocle_theme_opts()
+
+# another way to ask - is the avg addition in stage the same?=
+se = function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))}
+
+df.stage = 
+df.emb %>% 
+  filter(timepoint %in% c(24,30,36)) %>% 
+  group_by(temp, timepoint) %>% 
+  summarize(expected = median(expected_stage),
+            pseudostage.stderr = sd(pseudostage),
+            pseudostage = median(pseudostage))
+
+
+# pseudostage expectations
+df.stage$expected_add_hr = df.stage$expected - df.stage[df.stage$temp == '28C',]$expected
+df.stage$expected_add_ps = df.stage$pseudostage - df.stage[df.stage$temp == '28C',]$pseudostage
+df.stage$expected_diff = df.stage$expected_add_hr - df.stage$expected_add_ps
+
+#  scale to match hpf
+df.stage$pseudostage_scaled = df.stage$pseudostage + (df.stage$expected - df.stage$pseudostage)[1:3]
+
+
+# plot pseudstage and expected stage
+p <- ggplot(df.stage, aes(x = expected, y = pseudostage_scaled)) +
+  geom_smooth(method = "lm", se = FALSE, col = '#D5D5D5') +
+  geom_abline(lty = 'longdash') + 
+  geom_linerange(aes(ymin = pseudostage_scaled - pseudostage.stderr,
+                     ymax = pseudostage_scaled + pseudostage.stderr), size = 0.5) +
+  geom_point(aes(col = temp), size = 2) +
+  scale_color_manual(values = c('grey','#FF6458', '#FF2003')) +
+  monocle3:::monocle_theme_opts() +
+
+  xlim(20, 50) + 
+  ylim(20, 50) +
+  theme(legend.position = "none",
+          #rect = element_rect(fill = "transparent"),
+          panel.background = element_rect(fill = "transparent",colour = NA),
+          plot.background = element_rect(fill = "transparent",colour = NA)) 
+p
+
+
+
+# plot pseudostage against mean timepoint of neighbors
+
+# re-shape embryo data
+df.emb = coldat %>% 
+  group_by(embryo) %>% 
+  mutate(mean_nn_time = mean(mean_nn_time)) %>% 
+  ungroup() %>% 
+  select(embryo, temp, timepoint, pseudostage, expected_stage, expt, mean_nn_time) %>% 
+  distinct()
+df.emb$expt[grepl('HF4', df.emb$embryo)] <- 'HF4'
+
+
+df.stage = 
+df.emb %>% 
+  group_by(temp, timepoint) %>% 
+  summarize(expected = median(expected_stage),
+            pseudostage.err = sd(pseudostage),
+            pseudostage = median(pseudostage),
+            pseudostage_rescale = pseudostage + (24 - 8.95),
+            nn_time.err = sd(mean_nn_time),
+            nn_time = mean(mean_nn_time))
+
+
+# scatterplot mean_nn_time vs pseudostage
+p <- ggplot(df.stage %>% filter( !(timepoint == 96 | timepoint == 72),
+                                 temp == '28C'),
+            aes(x = nn_time, y = pseudostage_rescale)) +
+  geom_smooth(method = "lm", se = FALSE, col = 'black') +
+  geom_linerange(aes(ymin = pseudostage_rescale - pseudostage.err,
+                     ymax = pseudostage_rescale + pseudostage.err), size = 0.5, col = 'grey') +
+  geom_linerange(aes(xmin = nn_time - nn_time.err,
+                     xmax = nn_time + nn_time.err), size = 0.5, col = 'grey') +
+  geom_point(aes(fill = timepoint), size = 3, pch = 21, col = 'black') +
+  monocle3:::monocle_theme_opts() +
+  scale_fill_viridis_c() +
+  theme(legend.position = "none",
+          #rect = element_rect(fill = "transparent"),
+          panel.background = element_rect(fill = "transparent",colour = NA),
+          plot.background = element_rect(fill = "transparent",colour = NA)) 
+
+p
+
+
+
+```
+
+
+## plot cell abundance results
+
+```{r}
+celltype_disps.raw = fread('~/Dropbox/q_lab/projects/40_fish/HF4/variance/hf4_finalvarianceModelRaw_outs_hf-ctrls.csv')
+
+# cell abundance
+df.mean = fread('/Users/dorrity/Dropbox/manuscripts/stress_Dev/submission_cell/supplemental_files/Supplemental_Table_1_abundanceOuts.csv')
+
+
+
+
+# heatmap of abundances
+mat = 
+df.mean %>% 
+  filter(geno.v.wt == '34C') %>% 
+  select(cell_group, timepoint, abund_log2fc) %>% 
+  pivot_wider(names_from = timepoint, values_from = abund_log2fc,names_prefix = 'ps_') %>% 
+  mutate(across(c(ps_1, ps_2, ps_3, ps_4), ~replace(., is.na(.), 0))) %>% 
+  column_to_rownames(var = "cell_group") %>% 
+  as.matrix()
+
+# heatmap of abundances
+paletteLength = 12
+myColor <- colorRampPalette(c('steelblue','white', "darkred"))(paletteLength)
+myBreaks <- c(seq(min(mat,na.rm=TRUE), 0, length.out=ceiling(paletteLength/2) + 1),
+              seq(max(mat,na.rm=TRUE)/paletteLength, max(mat,na.rm=TRUE), length.out=floor(paletteLength/2)))
+pheatmap::pheatmap(mat, col = myColor, breaks = myBreaks, cluster_rows = FALSE, cluster_cols = FALSE,
+                   show_rownames = TRUE, show_colnames = TRUE)
+
+
+
+# CV heatmap
+df.var = fread('data/for-zscape/hotfish-varianceModel-out.txt')
+
+# process variance output
+mat.28 = 
+df.var %>% 
+  filter(genotype == 'WT') %>% 
+  select(cell_group, pseudostage.bin.n, cells_per_embryo_cv) %>% 
+  group_by(cell_group, pseudostage.bin.n) %>% 
+  summarize(avg_cv = mean(cells_per_embryo_cv, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = pseudostage.bin.n, values_from = avg_cv ,names_prefix = 'ps_') %>% 
+  select(ps_1, ps_2, ps_3, ps_4) %>% 
+  mutate(across(c(ps_1, ps_2, ps_3, ps_4), ~replace(., is.na(.), 0))) %>% 
+  column_to_rownames(var = "cell_group") %>% 
+  as.matrix()
+
+mat.34 = 
+df.var %>% 
+  filter(genotype == '34C') %>% 
+  select(cell_group, pseudostage.bin.n, cells_per_embryo_cv) %>% 
+  group_by(cell_group, pseudostage.bin.n) %>% 
+  summarize(avg_cv = mean(cells_per_embryo_cv, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = pseudostage.bin.n, values_from = avg_cv ,names_prefix = 'ps_') %>% 
+  mutate(across(c(ps_1, ps_2, ps_3, ps_4), ~replace(., is.na(.), 0))) %>% 
+  column_to_rownames(var = "cell_group") %>% 
+  as.matrix()
+
+
+# compute relative CV
+common_cts = intersect(rownames(mat.28), rownames(mat.34))
+mat.28 = mat.28[common_cts,]
+mat.34 = mat.34[common_cts,]
+mat = mat.34/mat.28
+mat[mat > 3] <- 3 # set major outliers to 3 (mean + 2sd)
+mat[mat < 1] <- 1 # set relative decreases to 1
+
+# heatmap of cv
+paletteLength = 12
+myColor <- colorRampPalette(c('white','#f5d314', "#f56a14"))(paletteLength)
+pheatmap::pheatmap(mat, col = myColor, cluster_rows = FALSE, cluster_cols = FALSE,
+                   show_rownames = TRUE, show_colnames = TRUE)
+
+
+```
+
+
+
+## plot pheno severity on umap
+
+
+```{r}
+
+# read in abundance counts by phenotypic severity
+df = fread('data/zscape/pheno-severity-abundance.txt')
+coldat = fread('data/zscape//hotfish-coldata-umap.txt')
+
+# subset to 34C, and compute log2 abundance ratio for severe vs norm
+cell_df = df %>% 
+  filter(genotype == '34C') %>% 
+  group_by(cell_group, pheno_note) %>% 
+  summarize(mean_count = mean(cells, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = pheno_note, values_from = mean_count) %>% 
+  mutate(severe_over_norm_log2 = log2((severe/(norm + 0.01)))) %>% 
+  mutate(severe_over_norm_log2 = ifelse(severe_over_norm_log2 > 2, 2, 
+                                 ifelse(severe_over_norm_log2 < -2, -2, severe_over_norm_log2))) %>% 
+  mutate(severe_over_norm_log2 = ifelse(norm == 0 & severe == 0, 0, severe_over_norm_log2))
+
+# merge in cell abundance results
+coldat$severe_over_norm_log2 = test$severe_over_norm_log2[match(coldat$cell_type_broad, cell_df$cell_group)]
+
+
+ggplot() +
+  geom_point(data = coldat %>% filter(experiment == 'HF4',
+                                      !is.na(severe_over_norm_log2)),
+             aes(x = umap_proj_global_1,
+                 y = umap_proj_global_2),
+             color = "black",
+             stroke = 0,
+             size = 0.4) +
+  geom_point(data = coldat %>% filter(experiment == 'HF4',
+                                      !is.na(severe_over_norm_log2)),
+             aes(x = umap_proj_global_1,
+                 y = umap_proj_global_2,
+             color = severe_over_norm_log2),
+             stroke = 0,
+             size = 0.3) +
+  scale_color_gradient2(low = 'steelblue', mid =  'white', high= 'tomato') +
+  theme_void() +
+  theme(legend.position = "none") 
+
+
+```
+
+
+
+#Figure S2
+
+## molecular vs cellular staging
+
+```{r}
+
+coldat = fread('data/zscape/hotfish-coldata-umap.txt')
+
+df = coldat %>% 
+         group_by(embryo) %>% 
+         summarize(age_ps = mean(pseudostage, na.rm=TRUE),
+                   age_nn = mean(mean_nn_time, na.rm=TRUE)) %>% 
+         right_join(coldat %>%
+                    select(embryo, timepoint, experiment_batch, timepoint, temp) %>%
+                    distinct() %>% ungroup())
+df$expected_stage = as.numeric(substr(df$timepoint, 1, 2)) * (0.055 * as.numeric(substr(df$temp, 1, 2)) - 0.57)
+
+
+# plot embryo stages through time, color by temp
+ggplot(df %>% 
+         filter(age_ps < 60)) +
+  geom_point(aes(x = age_ps, y = age_nn, fill = temp), pch = 21, stroke = 1) +
+  geom_smooth(aes(x = age_ps, y = age_nn, col = temp)) +
+  scale_color_manual(values = c('grey', '#fa8778', '#eb4934')) +
+  xlab('morphological staging (pseudostage)') +
+  ylab('molecular staging (nn-transcriptional age)') +
+  scale_fill_manual(values = c('grey', '#fa8778', '#eb4934')) +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none')
+
+
+## CV barplots
+var_df = 
+df %>% 
+  group_by(stage_bin, temp) %>% 
+  summarize(mean_ps = mean(age_ps, na.rm=TRUE),
+            var_ps = sd(age_ps, na.rm=TRUE),
+            cv_ps = sd(age_ps, na.rm=TRUE)/mean(age_ps, na.rm = TRUE),
+            mean_nn = mean(age_nn, na.rm=TRUE),
+            var_nn = sd(age_nn, na.rm=TRUE),
+            cv_nn = sd(age_nn, na.rm=TRUE)/mean(age_nn, na.rm = TRUE))
+
+# pseudostage cv
+ggplot(var_df %>% filter(temp == '28C')) +
+  geom_bar(aes(x = stage_bin, y = cv_ps, fill = stage_bin),
+           stat = 'identity', col = 'black') + 
+  scale_fill_viridis_d() +
+  ylim(0,0.32) +
+  theme(text = element_text(size=8),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  monocle3:::monocle_theme_opts() +
+  ylab('CV (pseudostage)') + xlab('timepoint bin (hpf)') +
+  theme(legend.position = 'none',
+        axis.line.x.bottom = element_line(colour = 'black', size = 0.7),
+        axis.line.y.left = element_line(colour = 'black', size = 0.7)) 
+
+# mean nn time cv
+ggplot(var_df %>% filter(temp == '28C')) +
+  geom_bar(aes(x = stage_bin, y = cv_nn, fill = stage_bin),
+           stat = 'identity', col = 'black') + 
+  scale_fill_viridis_d() +
+  ylim(0,0.32) +
+  theme(text = element_text(size=8),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  monocle3:::monocle_theme_opts() +
+  ylab('CV (nn age)') + xlab('timepoint bin (hpf)') +
+  theme(legend.position = 'none',
+        axis.line.x.bottom = element_line(colour = 'black', size = 0.7),
+        axis.line.y.left = element_line(colour = 'black', size = 0.7)) 
+
+
+```
+
