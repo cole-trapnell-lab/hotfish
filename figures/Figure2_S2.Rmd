@@ -231,87 +231,183 @@ p
 
 ```
 
+## plot changes in cell abudance + variance
 
-## plot cell abundance results
+### read in model outs
 
 ```{r}
-celltype_disps.raw = fread('~/Dropbox/q_lab/projects/40_fish/HF4/variance/hf4_finalvarianceModelRaw_outs_hf-ctrls.csv')
 
-# cell abundance
-df.mean = fread('/Users/dorrity/Dropbox/manuscripts/stress_Dev/submission_cell/supplemental_files/Supplemental_Table_1_abundanceOuts.csv')
+means = fread('data/zscape/hotfish-mean-model-outs.txt')
+cvs = fread('data/zscape/hotfish-cv-model-outs.txt')
+
+# make sure they share cell types
+common_cts = intersect(unique(means$cell_group), unique(cvs$cell_group))
+means = means %>% filter(cell_group %in% common_cts)
+cvs = cvs %>% filter(cell_group %in% common_cts)
+
+```
+
+### plot heatmaps - mean
+
+```{r}
+
+# plot mean abundance heatmap with significance boxes
+res_df = means
+res_df$timepoint = res_df$timepoint.bin.n
+
+geno = '34C'
+sig_thresh = 5e-2
+
+sig_df = res_df %>% 
+    ungroup() %>% 
+    filter(geno.v.wt == geno) %>%
+    filter(cell_group != "NA") %>%
+    dplyr::mutate(sig_fc = case_when(qval < sig_thresh ~ TRUE,
+                                     TRUE ~ FALSE))
+
+# get rid of cell types with no significant changes
+keep = sig_df %>% 
+    filter(sig_fc) %>% 
+    distinct(cell_group) %>% pull %>% 
+    as.character
+
+hm_wide = sig_df %>%
+    group_by(timepoint.bin.n, cell_group) %>%
+      summarize(abund_log2fc = mean(abund_log2fc, na.rm=TRUE)) %>%
+      dplyr::rename(timepoint = timepoint.bin.n) %>% 
+    select(timepoint, cell_group, abund_log2fc) %>%
+    pivot_wider(names_from = cell_group,
+                values_from = abund_log2fc, values_fill = c(0))
+
+hm_plot = hm_wide %>% 
+    pivot_longer(!timepoint, names_to = "cell_group", values_to = "plot") %>%
+    left_join(sig_df %>%
+                select(timepoint, cell_group, sig_fc), by = c("timepoint", "cell_group")) %>%
+    mutate(timepoint = as.factor(timepoint),
+           cell_group = as.factor(cell_group))
+
+# get clustering results
+hm_mat <- as.matrix(hm_wide[, -1])
+rownames(hm_mat) <- hm_wide$timepoint
+hm_mat <- t(hm_mat)
+hm.dendro <- as.dendrogram(hclust(d = dist(x = hm_mat)))
+hm.order <- order.dendrogram(hm.dendro)
+# reorder cell type factor
+hm_plot$cell_group <- factor(as.character(hm_plot$cell_group),
+                               rownames(hm_mat[hm.order,]))
+
+# make df for plotting significance boxes
+fms = hm_plot[hm_plot$sig_fc, c("timepoint", "cell_group")]
+fms$timepoint = as.integer(fms$timepoint)
+fms$cell_group = as.integer(fms$cell_group)
+
+ggplot(hm_plot, 
+       aes(x = timepoint, y = cell_group, fill = plot)) + 
+  geom_tile() +
+  scale_fill_gradient2(low = "#3234a9", mid = "white", high= "#7B0017",
+                       na.value="black",  limits = c(-2.0, 2.0), midpoint = 0) +
+  geom_rect(data=fms, size=0.5, fill=NA, colour="black",
+            aes(xmin=timepoint - 0.5, xmax=timepoint + 0.5, ymin=cell_group - 0.5, ymax=cell_group + 0.5)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_blank(), text = element_text(size = 12),
+        legend.title = element_blank(), plot.title = element_text(hjust = 0.5),
+        plot.margin=unit(c(.5,.5,.5,2.5),"cm"), legend.key.size = unit(0.5, 'cm'),
+        axis.line = element_line(colour = "black", size = 1), 
+        axis.ticks = element_line(colour = "black", size = 0.25)) +
+  ggtitle(geno) +
+  labs(fill = "mean log2FC") +
+  xlab('pseudostage bin') + 
+  coord_equal() +
+  monocle3:::monocle_theme_opts() 
 
 
-
-
-# heatmap of abundances
-mat = 
-df.mean %>% 
-  filter(geno.v.wt == '34C') %>% 
-  select(cell_group, timepoint, abund_log2fc) %>% 
-  pivot_wider(names_from = timepoint, values_from = abund_log2fc,names_prefix = 'ps_') %>% 
-  mutate(across(c(ps_1, ps_2, ps_3, ps_4), ~replace(., is.na(.), 0))) %>% 
-  column_to_rownames(var = "cell_group") %>% 
-  as.matrix()
-
-# heatmap of abundances
-paletteLength = 12
-myColor <- colorRampPalette(c('steelblue','white', "darkred"))(paletteLength)
-myBreaks <- c(seq(min(mat,na.rm=TRUE), 0, length.out=ceiling(paletteLength/2) + 1),
-              seq(max(mat,na.rm=TRUE)/paletteLength, max(mat,na.rm=TRUE), length.out=floor(paletteLength/2)))
-pheatmap::pheatmap(mat, col = myColor, breaks = myBreaks, cluster_rows = FALSE, cluster_cols = FALSE,
-                   show_rownames = TRUE, show_colnames = TRUE)
-
-
-
-# CV heatmap
-df.var = fread('data/for-zscape/hotfish-varianceModel-out.txt')
-
-# process variance output
-mat.28 = 
-df.var %>% 
-  filter(genotype == 'WT') %>% 
-  select(cell_group, pseudostage.bin.n, cells_per_embryo_cv) %>% 
-  group_by(cell_group, pseudostage.bin.n) %>% 
-  summarize(avg_cv = mean(cells_per_embryo_cv, na.rm = TRUE)) %>% 
-  pivot_wider(names_from = pseudostage.bin.n, values_from = avg_cv ,names_prefix = 'ps_') %>% 
-  select(ps_1, ps_2, ps_3, ps_4) %>% 
-  mutate(across(c(ps_1, ps_2, ps_3, ps_4), ~replace(., is.na(.), 0))) %>% 
-  column_to_rownames(var = "cell_group") %>% 
-  as.matrix()
-
-mat.34 = 
-df.var %>% 
-  filter(genotype == '34C') %>% 
-  select(cell_group, pseudostage.bin.n, cells_per_embryo_cv) %>% 
-  group_by(cell_group, pseudostage.bin.n) %>% 
-  summarize(avg_cv = mean(cells_per_embryo_cv, na.rm = TRUE)) %>% 
-  pivot_wider(names_from = pseudostage.bin.n, values_from = avg_cv ,names_prefix = 'ps_') %>% 
-  mutate(across(c(ps_1, ps_2, ps_3, ps_4), ~replace(., is.na(.), 0))) %>% 
-  column_to_rownames(var = "cell_group") %>% 
-  as.matrix()
-
-
-# compute relative CV
-common_cts = intersect(rownames(mat.28), rownames(mat.34))
-mat.28 = mat.28[common_cts,]
-mat.34 = mat.34[common_cts,]
-mat = mat.34/mat.28
-mat[mat > 3] <- 3 # set major outliers to 3 (mean + 2sd)
-mat[mat < 1] <- 1 # set relative decreases to 1
-
-# heatmap of cv
-paletteLength = 12
-myColor <- colorRampPalette(c('white','#f5d314', "#f56a14"))(paletteLength)
-pheatmap::pheatmap(mat, col = myColor, cluster_rows = FALSE, cluster_cols = FALSE,
-                   show_rownames = TRUE, show_colnames = TRUE)
+# grab ordering for cv plot
+ct_ord = levels(hm_plot$cell_group)
 
 
 ```
 
+### plot heatmaps - cv
+
+```{r}
+
+res_df = cvs
+res_df$timepoint = res_df$timepoint.bin.n
+
+geno = '34C'
+sig_thresh = 5e-2
+
+sig_df = res_df %>% 
+    ungroup() %>% 
+    filter(genotype == geno) %>%
+    filter(cell_group != "NA") %>%
+    filter(cv_rel != 0) %>% 
+    dplyr::mutate(sig_fc = case_when(cv_z_stat_p_val < sig_thresh ~ TRUE,
+                                     TRUE ~ FALSE))
+
+# get rid of cell types with no significant changes
+keep = sig_df %>% 
+    filter(sig_fc) %>% 
+    distinct(cell_group) %>% pull %>% 
+    as.character
+
+hm_wide = sig_df %>%
+    group_by(timepoint.bin.n, cell_group) %>%
+      summarize(cv_rel = mean(cv_rel, na.rm=TRUE)) %>%
+      dplyr::rename(timepoint = timepoint.bin.n) %>% 
+    select(timepoint, cell_group, cv_rel) %>%
+    pivot_wider(names_from = cell_group,
+                values_from = cv_rel, values_fill = c(0))
+
+hm_plot = hm_wide %>% 
+    pivot_longer(!timepoint, names_to = "cell_group", values_to = "plot") %>%
+    left_join(sig_df %>%
+                select(timepoint, cell_group, sig_fc), by = c("timepoint", "cell_group")) %>%
+    mutate(timepoint = as.factor(timepoint),
+           cell_group = as.factor(cell_group))
+
+# reorder cell type factor by mean results
+hm_plot$cell_group <- factor(as.character(hm_plot$cell_group),
+                               ct_ord)
+
+# make df for plotting significance boxes
+fms = hm_plot[hm_plot$sig_fc, c("timepoint", "cell_group")]
+fms$timepoint = as.integer(fms$timepoint)
+fms$cell_group = as.integer(fms$cell_group)
+
+# show non-log relative cv, set color palette
+colpal = '#fef6b5,#ffdd9a,#ffc285,#ffa679,#fa8a76,#f16d7a,#e15383'
+var_colpal = unlist(strsplit(colpal, split = ','))
+
+# # set relative decreases to 1
+hm_plot$plot[hm_plot$plot < 1] <- NA
+
+# set major outliers to 3 (mean + 2sd)
+cv_top = 3.0
+hm_plot$plot[hm_plot$plot >= cv_top] <- cv_top
+
+ggplot(hm_plot, 
+         aes(x = timepoint, y = cell_group, fill = plot)) + 
+    geom_tile() +
+    scale_fill_gradientn(colours = var_colpal, na.value = 'white') + 
+    geom_rect(data=fms, size=0.5, fill=NA, colour="black",
+              aes(xmin=timepoint - 0.5, xmax=timepoint + 0.5, ymin=cell_group - 0.5, ymax=cell_group + 0.5)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.title.y = element_blank(), text = element_text(size = 12),
+          legend.title = element_blank(), plot.title = element_text(hjust = 0.5),
+          plot.margin=unit(c(.5,.5,.5,2.5),"cm"), legend.key.size = unit(0.5, 'cm'),
+          axis.line = element_line(colour = "black", size = 1), 
+          axis.ticks = element_line(colour = "black", size = 0.25)) +
+    ggtitle(geno) +
+    labs(fill = "CV log2FC") +
+    xlab('pseudostage bin') + 
+    coord_equal() +
+    monocle3:::monocle_theme_opts()
+
+```
 
 
 ## plot pheno severity on umap
-
 
 ```{r}
 
