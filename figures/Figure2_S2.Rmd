@@ -231,6 +231,91 @@ p
 
 ```
 
+### pseudostage vs mean_nn_time stage
+
+
+```{r}
+
+se = function(x) {sd(x, na.rm=TRUE)/sqrt(sum(x, na.rm=TRUE))}
+
+df = coldat %>% 
+  group_by(oligo_tag, timepoint_fix, temp) %>% 
+  dplyr::summarize(mean_nn = mean(mean_nn_time, na.rm=TRUE),
+            mean_ps = mean(pseudostage, na.rm=TRUE),
+            mean_nn_time.err = se(mean_nn_time),
+            pseudostage.err = se(pseudostage))
+
+
+df.g = df %>% 
+  group_by(timepoint_fix, temp) %>% 
+  summarize(group.mean_nn = mean(mean_nn, na.rm=TRUE),
+            group.pseudostage = mean(mean_ps, na.rm=TRUE),
+            group.mean_nn.err = sd(mean_nn),
+            group.pseudostage.err = sd(mean_ps))
+
+```
+
+
+### scatterplots 
+
+```{r}
+
+timecols = c("#DF4828", "#E78C35", "#F6C141",  "#4EB265",  "#1965B0")
+time_pal = colorRampPalette(timecols)(length(unique(df.g$timepoint_fix))) 
+temp_pal = c('grey','#FF6458', '#FF2003') 
+
+# show 28C only
+ggplot(df.g %>% filter(temp == '28C'), aes(x = group.mean_nn, y = group.pseudostage)) +
+  geom_smooth(method = 'lm', se = FALSE, col = 'black', size = 0.5) + 
+  geom_linerange(aes(ymin = group.pseudostage - group.pseudostage.err,
+                     ymax = group.pseudostage + group.pseudostage.err), size = 0.5, col = 'grey') +
+  geom_linerange(aes(xmin = group.mean_nn - group.mean_nn.err,
+                     xmax = group.mean_nn + group.mean_nn.err), size = 0.5, col = 'grey') +
+  geom_point(aes(fill = factor(timepoint_fix)), pch = 21, col = 'black', size = 2) +
+  scale_fill_manual(values = time_pal) +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none') + 
+  ylab('pseudostage') + xlab('average timepoint of nearest-neighbors in reference')
+
+cor(df.g$group.mean_nn, df.g$group.pseudostage, method = 'pearson')
+
+# show all
+ggplot(df.g, aes(x = group.mean_nn, y = group.pseudostage)) +
+  geom_smooth(method = 'lm', se = FALSE, col = 'black', size = 0.5) + 
+  geom_linerange(aes(ymin = group.pseudostage - group.pseudostage.err,
+                     ymax = group.pseudostage + group.pseudostage.err), size = 0.5, col = 'grey') +
+  geom_linerange(aes(xmin = group.mean_nn - group.mean_nn.err,
+                     xmax = group.mean_nn + group.mean_nn.err), size = 0.5, col = 'grey') +
+  geom_point(aes(fill = factor(timepoint_fix)), pch = 21, col = 'black', size = 2) +
+  scale_fill_manual(values = time_pal) +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none') + 
+  ylab('pseudostage') + xlab('average timepoint of nearest-neighbors in reference')
+
+cor(df.g$group.mean_nn, df.g$group.pseudostage, method = 'pearson')
+
+
+
+# show HF timepoints only
+
+ggplot(df.g %>% filter(timepoint_fix %in% c(24,30,36)), aes(x = group.mean_nn, y = group.pseudostage)) +
+  # geom_smooth(method = 'lm', se = FALSE, col = 'black', size = 0.5) + 
+  geom_linerange(aes(ymin = group.pseudostage - group.pseudostage.err,
+                     ymax = group.pseudostage + group.pseudostage.err), size = 0.5, col = 'grey') +
+  geom_linerange(aes(xmin = group.mean_nn - group.mean_nn.err,
+                     xmax = group.mean_nn + group.mean_nn.err), size = 0.5, col = 'grey') +
+  geom_point(aes(fill = temp), pch = 21, col = 'black', size = 2) +
+  scale_fill_manual(values = temp_pal) +
+  monocle3:::monocle_theme_opts() +
+  facet_wrap(. ~ timepoint_fix) +
+  ylab('pseudostage') + xlab('average timepoint of nearest-neighbors in reference')
+
+cor(df.g$group.mean_nn, df.g$group.pseudostage, method = 'pearson')
+
+```
+
+
+
 ## plot changes in cell abudance + variance
 
 ### read in model outs

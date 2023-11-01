@@ -1,0 +1,340 @@
+---
+title: "Figure 3 and S3"
+output: html_notebook
+---
+
+# Figure 3
+
+## cell type age plots
+
+### read in cell type ages and make dotplots
+
+```{r}
+
+df.ct = fread('data/cell-type-ages.txt')
+
+# dotplot
+ggplot(df.ct %>% filter(total_cells > cell_count_thresh), aes(x = reorder(cell_type, rel), y = mean.time, fill = temp)) + 
+  geom_hline(yintercept = median(df.sum[df.sum$temp == '28C',]$mean.time)) +
+  geom_hline(yintercept = median(df.sum[df.sum$temp == '28C',]$mean.time) + sd(df.sum[df.sum$temp == '28C',]$mean.time),
+             lty = 'longdash', col = 'grey') +
+  geom_hline(yintercept = median(df.sum[df.sum$temp == '28C',]$mean.time) - sd(df.sum[df.sum$temp == '28C',]$mean.time),
+             lty = 'longdash', col = 'grey') +
+  scale_fill_manual(values = c('darkgrey', '#f77168', 'darkred')) +
+  stat_summary(fun.data="mean_sdl", mult=1, 
+                 geom="crossbar", width=0.5) +
+  geom_point(size = 1, color='black', pch = 21, position = position_jitter(h = 0.1, w = 0, seed = 2021)) +
+  facet_wrap(temp ~ ., ncol = 1) +
+  coord_flip() +
+  theme(text = element_text(size=6),
+        legend.position = 'none') +
+  monocle3:::monocle_theme_opts()
+
+
+```
+
+
+
+## cell type age model
+
+### read in covariates df (has expression levels of signatures at basal (28C) condition) along with relative progression
+
+
+```{r}
+
+covariates_df = fread('/Users/dorrity/Dropbox/q_lab/projects/40_fish/HF4/hotfish-github/data/for-zscape/covariates-df-relative-progression.txt')
+covariates_df$log_rel_progression = log2(covariates_df$rel_28) # response is log relative progression of 32/34C over 28C
+
+```
+
+
+### model
+
+```{r}
+
+fit.null = VGAM::vglm('log_rel_progression ~ 1',
+                      data = covariates_df,
+                      family = gaussianff(zero = NULL),
+                      trace = FALSE)
+
+fit = VGAM::vglm('log_rel_progression ~
+                 timepoint_fix +
+                 upr_index +
+                 translation_index +
+                 proliferation_index +
+                 apoptosis_index +
+                 degr_misfolded_index +
+                 stress_granule_index +
+                 ubq_index +
+                 heat_stress_index +
+                 aerobic_resp_index +
+                 anaerobic_resp_index +
+                 tca_cycle_index',
+                      data = covariates_df,
+                      family = gaussianff(zero = NULL),
+                      trace = FALSE)
+
+lr.obj <- lrtest(fit, fit.null)
+test.stat <- lr.obj@Body$Chisq[2]
+p.value <- lr.obj@Body$`Pr(>Chisq)`[2]
+pseudo_R2 <- 1 - (logLik(fit) / logLik(fit.null))
+pseudo_R2
+
+#covariates_df$prediction = predict(fit, covariates_df)[,1][match(rownames(covariates_df), names(predict(fit, covariates_df)[,1]))]
+
+# pull out mean coefficients
+selected_coefs = coef(fit)
+selected_coefs = selected_coefs[grep('\\:1', names(selected_coefs))]
+tidy_cfs = lapply(selected_coefs, function(cfs){
+  broom::tidy(cfs)
+})
+
+ct_names = names(selected_coefs)
+tidy_cfs = do.call(rbind, tidy_cfs)
+tidy_cfs$term = ct_names
+row.names(tidy_cfs) = NULL
+colnames(tidy_cfs) = c('value', 'term')
+
+```
+
+### plot model outputs
+
+```{r}
+
+
+
+# plot top coefficients as barplot
+ggplot(tidy_cfs %>% filter(term != '(Intercept):1')) +
+  geom_bar(aes(x = reorder(term, - value), y = value , fill = value), stat = 'identity', col = 'black') +
+  scale_fill_gradient2(low = 'steelblue', mid = 'white', high = 'tomato') +
+  monocle3:::monocle_theme_opts() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+# plot UPR against progression
+ggplot(covariates_df %>% filter(upr_index < 0.05)) + # removed hatching gland to see the rest of points
+  geom_point(aes(x = upr_index, y = rel_28, fill = temp.x), stroke = 0.75, pch = 21, cex = 3) +
+  geom_smooth(aes(x = upr_index, y = rel_28), method = 'lm', lwd = 1, se = FALSE, col = 'grey') +
+  scale_fill_manual(values = c('#f77168', 'darkred')) +
+  xlab('UPR index') + ylab('relative cell type progression') +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none') +
+  theme(aspect.ratio=1)
+
+# same plot but for proliferation
+ggplot(covariates_df) +
+  geom_point(aes(x = proliferation_index, y = rel_28, fill = temp.x), stroke = 1, pch = 21, cex = 2.2) +
+  geom_smooth(aes(x = proliferation_index, y = rel_28), method = 'lm', lwd = 1, se = FALSE, col = 'grey') +
+  scale_fill_manual(values = c('#f77168', 'darkred')) +
+  xlab('proliferation index') + ylab('relative cell type progression') +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none') +
+  theme(aspect.ratio=1) 
+
+
+
+```
+
+
+## cell type stage deviation
+
+```{r}
+
+df.ct = fread('data/cell-type-ages.txt')
+
+# show deviation as histograms/density plots
+ggplot() + 
+  geom_density(data = df.sum %>%
+               filter(total_cells > cell_count_thresh,
+                sd.time < 5),
+                aes(x = deviation, fill = temp),
+               lwd = 1.25, col = 'black', alpha = 0.5) +
+  scale_fill_manual(values = c('darkgrey', '#f77168', 'darkred')) +
+  xlim(-20,20) +
+  xlab('deviation from whole-embryo expectation') +
+  monocle3:::monocle_theme_opts() +
+  theme(legend.position = 'none')
+
+
+```
+
+
+
+## age covariance
+
+### read in coldata
+```{r}
+
+coldat = fread('data/zscape/hotfish-ref_18-48hpf_coldata.csv')
+
+```
+
+### compute correlations, produce heatmaps
+
+```{r}
+
+df = coldat %>% 
+  filter(cell_type_broad != '') %>% 
+  group_by(embryo, cell_type_broad, timepoint, temp) %>% 
+  dplyr::summarize(mean_nn_time = mean(mean_nn_time, na.rm=TRUE))
+
+timepoint_of_interest = 30
+
+df.wider.28 = df %>% filter(temp == '28C', timepoint == timepoint_of_interest) %>% 
+    pivot_wider(names_from = cell_type_broad, values_from = mean_nn_time, values_fill = list(mean_nn_time = 0)) %>%
+    as.data.frame()
+rownames(df.wider.28) = df.wider.28$embryo
+
+df.wider.32 = df %>% filter(temp == '32C', timepoint == timepoint_of_interest) %>% 
+    pivot_wider(names_from = cell_type_broad, values_from = mean_nn_time, values_fill = list(mean_nn_time = 0)) %>%
+    as.data.frame()
+rownames(df.wider.32) = df.wider.32$embryo
+
+df.wider.34 = df %>% filter(temp == '34C', timepoint == timepoint_of_interest) %>% 
+    pivot_wider(names_from = cell_type_broad, values_from = mean_nn_time, values_fill = list(mean_nn_time = 0)) %>%
+    as.data.frame()
+rownames(df.wider.34) = df.wider.34$embryo
+
+mat.28 = df.wider.28 %>% select(-embryo, -timepoint, -temp) %>% as.matrix()
+mat.32 = df.wider.32 %>% select(-embryo, -timepoint, -temp) %>% as.matrix()
+mat.34 = df.wider.34 %>% select(-embryo, -timepoint, -temp) %>% as.matrix()
+
+# filter cell types without transcriptional age values from at least 100 embryos
+col_sparsity_thresh = 100
+mat.28 = mat.28[,colSums(mat.28) > col_sparsity_thresh]
+mat.32 = mat.32[,colSums(mat.32) > col_sparsity_thresh]
+mat.34 = mat.34[,colSums(mat.34) > col_sparsity_thresh]
+
+# compute covariances
+cov.28 = cor(mat.28)
+cov.32 = cor(mat.32)
+cov.34 = cor(mat.34)
+
+# set NAs to 0
+cov.28[is.na(cov.28)] <- 0
+cov.32[is.na(cov.32)] <- 0
+cov.34[is.na(cov.34)] <- 0
+
+# subset to cell types with values at all temperatures
+cts = intersect(rownames(cov.28), rownames(cov.32))
+cts = intersect(cts, rownames(cov.34))
+cov.28 = cov.28[cts,cts]
+cov.32 = cov.32[cts,cts]
+cov.34 = cov.34[cts,cts]
+
+# set colors
+paletteLength = 12
+myColor <- colorRampPalette(c('steelblue','white', "darkred"))(paletteLength)
+myBreaks <- c(seq(min(cov.28,na.rm=TRUE), 0, length.out=ceiling(paletteLength/2) + 1),
+              seq(max(cov.28,na.rm=TRUE)/paletteLength, max(cov.28,na.rm=TRUE), length.out=floor(paletteLength/2)))
+
+# set ordering using the 28C heatmap
+out = pheatmap(cov.28, col = myColor, breaks = myBreaks, cluster_rows = TRUE, cluster_cols = TRUE,
+         show_rownames = FALSE, show_colnames = FALSE)
+row.ord = out$tree_row[["order"]]
+col.ord = out$tree_col[["order"]]
+mat.28.reord = cov.28[row.ord, col.ord]
+mat.32.reord = cov.32[row.ord, col.ord]
+mat.34.reord = cov.34[row.ord, col.ord]
+
+pheatmap(mat.28.reord, col = myColor, breaks = myBreaks, cluster_rows = FALSE, cluster_cols = FALSE,
+         show_rownames = FALSE, show_colnames = FALSE)
+pheatmap(mat.32.reord, col = myColor, breaks = myBreaks, cluster_rows = FALSE, cluster_cols = FALSE,
+         show_rownames = FALSE, show_colnames = FALSE)
+pheatmap(mat.34.reord, col = myColor, breaks = myBreaks, cluster_rows = FALSE, cluster_cols = FALSE,
+         show_rownames = FALSE, show_colnames = FALSE)
+
+# density plot of correlations for each temp
+plot(density(cov.34), xlim = c(-1,1), lwd = 3, bty = 'n',col = '#D14334', ylim = c(0,4))
+lines(density(cov.32), lwd = 3, col = '#E5786B')
+lines(density(cov.28), lwd = 3, col = '#9F9F9F')
+
+
+```
+
+
+
+## Figure S3
+
+
+## heat shock against progression
+
+# plot heat shock against progression
+
+```{r}
+
+
+covariates_df = fread('data/covariates-df-relative-progression.txt')
+
+ggplot(covariates_df %>% filter(!is.na(rel_28))) + 
+  geom_point(aes(x = heat_stress_index, y = rel_28 %>% log2(), col = temp.x)) +
+  geom_smooth(aes(x = heat_stress_index, y = rel_28 %>% log2(), col = temp.x),
+              method = 'lm') +
+  xlab('heat stress signature') + ylab('log2 relative progression over 28C') +
+  monocle3:::monocle_theme_opts() +
+   scale_color_manual(values = c('#fa8778', '#eb4934')) +
+  labs(col = 'temperature')
+
+# show as an ordered barplot by progression
+ggplot(covariates_df  %>% filter(!is.na(rel_28),
+                            temp.x == '34C')) + 
+  geom_bar(aes(x = reorder(cell_type_broad, rel_28), y = heat_stress_index, fill = temp.x),
+           stat = 'identity', position = 'dodge') +
+  xlab('cell types ordered by relative progression') + ylab('heat stress signature') +
+  monocle3:::monocle_theme_opts() +
+  scale_fill_manual(values = c('#eb4934')) +
+  labs(fill = 'temperature') +
+  coord_flip() + 
+  facet_grid(.~timepoint_fix)
+
+
+
+```
+
+
+## boxplots of cell type-specific acceleration
+
+```{r}
+
+# do a set of types
+types_of_interest = c('endothelium (dorsal aorta)',
+                      'notochord',
+                      'neural crest + pigment cell progenitor',
+                      'basal cell')
+
+p <- ggplot(df %>% filter(cell_type %in% types_of_interest,
+                          timepoint %in% c(24,30,36)), aes(x = temp, y = mean_nn_time, col = temp)) +
+  geom_jitter() + 
+  geom_boxplot(size = 2) +
+  scale_color_manual(values = c('grey', '#fa8778', '#eb4934')) +
+  ylim(15,70) + 
+   theme(axis.title.x=element_blank(),
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank(),
+    legend.position = "none",
+    #rect = element_rect(fill = "transparent"),
+    panel.background = element_rect(fill = "transparent",colour = NA),
+    plot.background = element_rect(fill = "transparent",colour = NA)) +
+  facet_grid(.~cell_type)
+
+p
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
